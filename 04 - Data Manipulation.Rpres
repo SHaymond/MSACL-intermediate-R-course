@@ -254,11 +254,17 @@ Consider non-tidy data:
 samples_jan_messy <- read_csv("data/messy/2017-01-06-sample-messy.csv")
 head(samples_jan_messy)
 ```
+> sample_type and sample_name stored in the rows, 
+> compound_name spread across the column names, 
+> and concentrations stored in cells.
 
-Gathering data with `gather()`
+
+Gathering data with `gather()` and `pivot_longer()`
 ========================================================
-- key argument to name the variable you are gathering
-- value argument to name the new column with the values you extract from the old column
+- `pivot_longer()` is new (and now recommended) approach
+- use similar syntax, definition of arguments
+  - specify the variable(s) you are gathering
+  - specify the column names for the new columns that will contain the names and values you extract from the old column(s)
 
 ![Gather operation](assets/data_gather.png)
 
@@ -266,27 +272,51 @@ Example: `gather()`
 ========================================================
 class: small-code
 ```{r}
-samples_jan_tidy <- samples_jan_messy %>%
+samples_jan_tidy_gather <- samples_jan_messy %>%
   gather("morphine", "hydromorphone", "oxymorphone", "codeine", "hydrocodone", "oxycodone",
          key = "compound_name", value = "concentration")
-head(samples_jan_tidy)
+head(samples_jan_tidy_gather)
 ```
+*Note: key and value arguments*
+
+Example: `pivot_longer()`
+========================================================
+class: small-code
+```{r}
+samples_jan_tidy_longer <-samples_jan_messy %>% 
+  pivot_longer(cols = c(-batch_name, -sample_name, -sample_type), names_to = "compound_name", values_to = "concentration")
+head(samples_jan_tidy_longer)
+```
+*Note: names_to and values_to arguments + cols argument*
 
 Making data untidy
 ========================================================
 
 - Inverse operation of `gather()` is `spread()`
-- Specify the key, which is the variable than needs to be used to generate multiple new columns
-- Specify the value, which takes the variable that will need to populate those new columns
+- Inverse operation of `pivot_longer()` is `pivot_wider()`
+- Similar syntax:
+  - Specify where new columns names come from
+  - Specify where new column values come from
 
 Example: `spread()`
 ========================================================
 class: small-code
 ```{r}
-samples_jan_remessy <- samples_jan_tidy %>%
+samples_jan_remessy_spread <- samples_jan_tidy_gather %>%
   spread(key = "compound_name", value = "concentration")
-head(samples_jan_remessy)
+head(samples_jan_remessy_spread)
 ```
+*Note: key and value arguments*
+
+Example: `pivot_wider()`
+========================================================
+class: small-code
+```{r}
+samples_jan_remessy_wider <- samples_jan_tidy_longer %>%
+  pivot_wider(names_from = "compound_name", values_from = "concentration")
+head(samples_jan_remessy_wider)
+```
+*Note: names_from and values_from arguments*
 
 Exercise 4
 ========================================================

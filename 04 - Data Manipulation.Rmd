@@ -43,7 +43,7 @@ You can load the core tidyverse packages by loading tidyverse: `library(tidyvers
 
 ## Manipulating data with dplyr
 
-The [dplyr package](http://dplyr.tidyverse.org/) provides functions to carve, expand, and collapse a data frame (or tibble).
+The [dplyr package](http://dplyr.tidyverse.org/) provides functions to carve, expand, and collapse a data frame (or tibble). To complement dplyr, we have also loaded the [tidylog package](https://github.com/elbersb/tidylog), which provides additional output to clarify exactly what the dplyr package did when you run certain commands.
 
 ### Carving your data set
 
@@ -185,9 +185,7 @@ max()
 
 ```{r}
 batch_jan_reviews <- batch_jan %>%
-  mutate(review_start_timestamp = mdy_hm(review_start_timestamp),
-         review_complete_timestamp = mdy_hm(review_complete_timestamp),
-         review_duration = as.numeric(difftime(review_complete_timestamp, review_start_timestamp,
+  mutate(review_duration = as.numeric(difftime(review_complete_timestamp, review_start_timestamp,
                                                units = "mins")))
 # note: the output of difftime is a time interval, convert to numeric to avoid confusion downstream
 reviews_jan_grouped <- batch_jan_reviews %>%
@@ -280,29 +278,50 @@ samples_jan_messy <- read_csv("data/messy/2017-01-06-sample-messy.csv")
 head(samples_jan_messy)
 ```
 
+In this case, we have sample_type and sample_name stored in the rows, compound_name spread across the column names, and concentrations stored in cells.  
+
 This certainly isn't impossible to work with, but there are some challenges with not having separate observations on each row. Arguably the biggest challenges revolve around built-in tidyverse functionality, with grouping and plotting as the most prominent issues you might encounter. Luckily the [tidyr package](https://tidyr.tidyverse.org) can help reshape your data.
 
-The `gather()` function can take a list of columns as arguments, the key argument to name the variable you are gathering, and the value argument to name the new column with the values you extract from the old column.
+Previous versions (i.e., prior to 1.0.0) of `tidyr` used the `gather()` function to gather data into tidy, longer formats. A newer approach is to use `pivot_longer()` to make datasets longer by increasing the number of rows and decreasing the number of columns. (The `gather()` function isn't going away, but it is recommended to use `pivot_longer()` instead.) 
 
 ![Gather operation](assets/data_gather.png)
 
 ```{r}
-samples_jan_tidy <- samples_jan_messy %>%
+samples_jan_tidy_gather <- samples_jan_messy %>%
   gather("morphine", "hydromorphone", "oxymorphone", "codeine", "hydrocodone", "oxycodone",
          key = "compound_name", value = "concentration")
-head(samples_jan_tidy)
+head(samples_jan_tidy_gather)
 ```
 
-The syntax takes some getting used to, so it's important to remember that you are taking column names and shoving those into rows, so you have name that variable (the key), and you are also putting values across multiple columns into one column, whose variable also needs to be named (the value).
 
-Sometimes other people want your data and they prefer non-tidy data. Sometimes you need messy data for quick visualization purposes. Or sometimes you have data that is actually non-tidy not because multiple observations are on one row, but because a single observation is split up between rows when it could be on one row. It is not too difficult to perform the opposite operation of `gather()` using the `spread()` function. You specify the key, which is the variable than needs to be used to generate multiple new columns, as well as the value, which takes the variable that will need to populate those new columns. Let's do the opposite on the data set we just gathered:
 ```{r}
-samples_jan_remessy <- samples_jan_tidy %>%
-  spread(key = "compound_name", value = "concentration")
-head(samples_jan_remessy)
+samples_jan_tidy_longer <-samples_jan_messy %>% 
+  pivot_longer(cols = c(-batch_name, -sample_name, -sample_type), names_to = "compound_name", values_to = "concentration")
+head(samples_jan_tidy_longer)
 ```
 
-There are other useful tidyr functions such as `separate()` and `unite()` to split one column into multiple columns or combine multiple columns into one column, respectively. These are pretty straightforward to pick up so can be an independent exercise if you are intereted.
+The syntax takes some getting used to, so it's important to remember that you are taking column names and placing those into rows, so you have to name that variable (via `names_to` argument) -- where do you want the names to go, and you are also putting values across multiple columns into one column, whose variable also needs to be named (via the `values_to` argument) -- where do you want the values to go. You have to provide the dataframe you want it to work on and which columns should be gathered. Here, we specified all but the first three columns.  
+
+Sometimes other people want your data and they prefer non-tidy data. Sometimes you need messy data for quick visualization purposes. Or sometimes you have data that is actually non-tidy not because multiple observations are on one row, but because a single observation is split up between rows when it could be on one row. It is not too difficult to perform the inverse operation of `gather()` or `pivot_longer()` using the `spread()` or `pivot_wider()` functions. The `pivot_wider()` function increases the number of columns and decreases the number of rows, making data messy (non-tidy). (As above, the `spread()` function isn't going away, but it is recommended to use `pivot_wider()` instead.)   
+
+Similar to the syntax shown above: in the `names_from` argument, you specify the variable that needs to be used to generate multiple new columns -- where do you get the names from; you also specify the `values_from` argument to indicate which variable will be used to populate the values of those new columns -- where do you get the values from. 
+
+Let's apply these inverse functions on the data sets we just tidied:  
+```{r}
+# using spread
+samples_jan_remessy_spread <- samples_jan_tidy_gather %>%
+  spread(key = "compound_name", value = "concentration")
+head(samples_jan_remessy_spread)
+```
+
+```{r}
+# using pivot_wider
+samples_jan_remessy_wider <- samples_jan_tidy_longer %>%
+  pivot_wider(names_from = "compound_name", values_from = "concentration")
+head(samples_jan_remessy_wider)
+```
+
+There are other useful tidyr functions such as `separate()` and `unite()` to split one column into multiple columns or combine multiple columns into one column, respectively. These are pretty straightforward to pick up. We will demonstrate use of `unite()` in the next lesson.  
 
 **Exercise 4**
 
@@ -311,32 +330,32 @@ The "2017-01-06-batch-messy.csv" file in the messy subdirectory of the data dir 
 1. Each parameter in a batch is represented with a distinct column per compound, but all compounds appear on the same row. Each compound represents a distinct observation, so these should appear on their own rows.
 1. There are 3 parameters per obsevation (compound) - calibration slope, intercept, and R^2. However these appear on different lines. All 3 paramters need to appear on the same row.
 
-After solving these problems, each row should contain a single compound with all three parameters appearing on that single row. Use `gather()` and `spread()` to tidy this data.
+After solving these problems, each row should contain a single compound with all three parameters appearing on that single row. Use `pivot_longer()` and `pivot_wider()` to reformat this data.
 
 ```{r tidyr_exercise, echo = FALSE, eval = FALSE}
+# complete this code
 batch_jan_messy <- read_csv("data/messy/")
-batch_jan_gathered <- batch_jan_messy %>%
-  gather()
-batch_jan_tidy <- batch_jan_gathered %>%
-  spread()
+batch_jan_longer <- batch_jan_messy %>%
+  pivot_longer()
+batch_jan_tidy <- batch_jan_longer %>%
+  pivot_wider()
 ```
 
 ```{r}
 batch_jan_messy <- read_csv("data/messy/2017-01-06-batch-messy.csv")
 head(batch_jan_messy, 10)
-batch_jan_gathered <- batch_jan_messy %>%
-  gather("codeine",	"hydrocodone", "hydromorphone",	"morphine",	"oxycodone", 
-         "oxymorphone", key = "compound_name", value = "value")
-batch_jan_tidy <- batch_jan_gathered %>%
-  spread(key = "parameter", value = "value")
+batch_jan_longer <- batch_jan_messy %>%
+  pivot_longer(cols = c(codeine:oxymorphone), names_to = "compound_name", values_to = "value")
+batch_jan_tidy <- batch_jan_longer %>%
+  pivot_wider(names_from = "parameter", values_from = "value")
 head(batch_jan_tidy, 10)
 ```
 
 ## Summary
 
-- The dplyr package offers a number of useful functions for manipulating data sets
+- The `dplyr` package offers a number of useful functions for manipulating data sets
   - `select()` subsets columns by name and `filter()` subset rows by condition
   - `mutate()` adds additional columns, typically with calculations or logic based on other columns
   - `group_by()` and `summarize()` allow grouping by one or more variables and performing calculations within the group
-- Manipulating dates and times with the lubridate package can make grouping by time periods easier
-- The tidyr package provides functions to tidy and untidy data
+- Manipulating dates and times with the `lubridate` package can make grouping by time periods easier
+- The `tidyr` package provides functions to tidy and untidy data
